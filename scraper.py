@@ -47,27 +47,23 @@ def generate_html(data, output_dir='public'):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{data['username']} | Linktree Clone</title>
+    <title>{data['username']}</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="container">
-        <img src="profile_picture.jpg" alt="Profile Picture" id="profile-picture">
-        <h1>@{data['username']}</h1>
-        <div id="social-icons">
-"""
-    for social in data['social_links']:
-        html_content += f'            <a href="{social["url"]}" target="_blank"><img src="https://cdn.simpleicons.org/{social["type"].lower()}" alt="{social["type"]}"></a>\n'
-
-    html_content += """
-        </div>
-        <div id="links">
+    <div class="container">
+        <aside class="sidebar">
+            <div class="profile">
+                <img src="profile_picture.jpg" alt="Profile Picture" class="profile-img">
+                <h1 class="profile-name">@{data['username']}</h1>
+            </div>
+        </aside>
+        <main class="main-content">
 """
     for link in data['links']:
-        html_content += f'            <a href="{link["url"]}" class="link" target="_blank">{link["title"]}</a>\n'
-
+        html_content += f'            <a href="{link["url"]}" class="link-card" target="_blank">{link["title"]}</a>\n'
     html_content += """
-        </div>
+        </main>
     </div>
 </body>
 </html>
@@ -78,65 +74,63 @@ def generate_html(data, output_dir='public'):
 def generate_css(output_dir='public'):
     css_content = """
 body {
-    background-color: #5C2023;
-    color: white;
-    font-family: Arial, sans-serif;
+    font-family: "San Francisco Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     margin: 0;
-    padding: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
+    background-color: #f0f2f5;
+    color: #1c1e21;
 }
 
-#container {
+.container {
+    display: flex;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.sidebar {
+    width: 300px;
+    padding: 2rem;
+    background-color: #fff;
+    border-right: 1px solid #dddfe2;
+    height: 100vh;
+    position: fixed;
+}
+
+.profile {
     text-align: center;
-    background-color: #B13834;
-    padding: 2em;
-    border-radius: 10px;
-    width: 80%;
-    max-width: 600px;
 }
 
-#profile-picture {
-    width: 100px;
-    height: 100px;
+.profile-img {
+    width: 120px;
+    height: 120px;
     border-radius: 50%;
-    border: 3px solid white;
+    margin-bottom: 1rem;
 }
 
-#social-icons {
-    margin: 1em 0;
+.profile-name {
+    font-size: 1.5rem;
+    margin: 0;
 }
 
-#social-icons a {
-    margin: 0 0.5em;
+.main-content {
+    margin-left: 300px;
+    padding: 2rem;
+    width: 100%;
 }
 
-#social-icons img {
-    width: 32px;
-    height: 32px;
-    filter: invert(1);
-}
-
-#links {
-    display: flex;
-    flex-direction: column;
-    gap: 1em;
-}
-
-.link {
-    background-color: white;
-    color: #5C2023;
-    padding: 1em;
+.link-card {
+    display: block;
+    background-color: #fff;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
     text-decoration: none;
-    border-radius: 5px;
-    font-weight: bold;
-    transition: background-color 0.3s;
+    color: #1c1e21;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+    transition: all 0.3s cubic-bezier(.25,.8,.25,1);
 }
 
-.link:hover {
-    background-color: #ddd;
+.link-card:hover {
+    box-shadow: 0 14px 28px rgba(0,0,0,0.25), 0 10px 10px rgba(0,0,0,0.22);
 }
 """
     with open(os.path.join(output_dir, 'style.css'), 'w', encoding='utf-8') as f:
