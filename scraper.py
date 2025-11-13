@@ -201,44 +201,44 @@ def generate_html(data: Dict[str, Any], output_dir: str = "public") -> None:
     year = datetime.now().year
 
     html_content = f"""<!DOCTYPE html>
-<html lang=\"en\">
+<html lang="en">
   <head>
-    <meta charset=\"utf-8\" />
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{SITE_TITLE}</title>
-    <meta name=\"description\" content=\"The digital home of {username}.\" />
-    <link rel=\"stylesheet\" href=\"style.css\" />
+    <meta name="description" content="The digital home of {username}." />
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div class=\"background-gradient\" aria-hidden=\"true\"></div>
-    <main class=\"page\">
-      <section class=\"profile-card\">
+    <div class="background-gradient" aria-hidden="true"></div>
+    <main class="page">
+      <section class="profile-card">
         <img
-          src=\"profile_picture.jpg\"
-          alt=\"Portrait of {username}\"
-          class=\"profile-photo\"
+          src="profile_picture.jpg"
+          alt="Portrait of {username}"
+          class="profile-photo"
         />
-        <h1 class=\"name\">{username}</h1>
-        <p class=\"tagline\">{TAGLINE}</p>
-        <div class=\"meta\">
+        <h1 class="name">{username}</h1>
+        <p class="tagline">{TAGLINE}</p>{social_nav_html}
+        <div class="meta">
           <span>{LOCATION}</span>
           <span>{ROLE}</span>
         </div>
       </section>
 
-      <section class=\"links-grid\" aria-labelledby=\"explore-heading\">
-        <header class=\"section-header\">
-          <h2 id=\"explore-heading\">{SECTION_HEADING}</h2>
-          <p class=\"section-intro\">{SECTION_INTRO}</p>
+      <section class="links-grid" aria-labelledby="explore-heading">
+        <header class="section-header">
+          <h2 id="explore-heading">{SECTION_HEADING}</h2>
+          <p class="section-intro">{SECTION_INTRO}</p>
         </header>
-        <div class=\"links\">
+        <div class="links">
 {links_block}
         </div>
       </section>
 
-      <footer class=\"footer\">
+      <footer class="footer">
         <p>{FOOTER_LINE}</p>
-        <p class=\"small-print\">© {year} {username}. Crafted with care.</p>
+        <p class="small-print">© {year} {username}. Crafted with care.</p>
       </footer>
     </main>
   </body>
@@ -248,7 +248,6 @@ def generate_html(data: Dict[str, Any], output_dir: str = "public") -> None:
     index_path = os.path.join(output_dir, "index.html")
     with open(index_path, "w", encoding="utf-8") as f:
         f.write(html_content)
-
 
 def generate_css(output_dir: str = "public") -> None:
     """Generate the stylesheet for the new layout.
@@ -380,6 +379,43 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+.social-links {
+  margin-top: 1.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.social-link {
+  text-decoration: none;
+}
+
+.social-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: radial-gradient(circle at 30% 0%, rgba(148, 163, 184, 0.35), rgba(15, 23, 42, 0.96));
+  border: 1px solid rgba(148, 163, 184, 0.7);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.88);
+  transition:
+    transform 140ms ease-out,
+    border-color 140ms ease-out,
+    background 140ms ease-out,
+    box-shadow 140ms ease-out;
+}
+
+.social-link:hover .social-icon {
+  transform: translateY(-2px);
+  border-color: rgba(129, 140, 248, 1);
+  background: radial-gradient(circle at 30% 0%, rgba(79, 70, 229, 0.6), rgba(15, 23, 42, 0.98));
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.95);
 }
 
 .meta span {
