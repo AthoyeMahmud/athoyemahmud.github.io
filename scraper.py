@@ -22,6 +22,7 @@ from typing import Any, Dict, List
 
 from urllib.request import urlretrieve
 from urllib.parse import urlparse
+from urllib.parse import urlparse
 
 try:
     import requests
@@ -123,13 +124,10 @@ def download_profile_picture(url: str, output_dir: str = "public") -> None:
 # --- HTML + CSS generators (new layout) ------------------------------------
 
 
-def _subtitle_for(title: str, url: str | None = None) -> str:
+def _subtitle_for(title: str, url: str) -> str:
     key = title.strip().lower()
     if key in SUBTITLE_OVERRIDES:
         return SUBTITLE_OVERRIDES[key]
-
-    if not url:
-        return f"Visit {title}"
 
     domain = urlparse(url).netloc.replace("www.", "").lower()
     domain_key = domain.split(".")[0]
@@ -152,7 +150,62 @@ def _display_title(link: Dict[str, str]) -> str:
     candidate = domain.split(".")[0]
     candidate = candidate.replace("-", " ")
     return candidate.title() or "Link"
+def _platform_from_url(url: str) -> str:
+    """Best-effort guess of platform name from URL."""
+    try:
+        host = urlparse(url).netloc.lower()
+    except Exception:
+        host = ""
 
+    host = host.replace("www.", "")
+    if "github.com" in host:
+        return "GitHub"
+    if "linkedin.com" in host:
+        return "LinkedIn"
+    if "instagram.com" in host:
+        return "Instagram"
+    if "threads.net" in host:
+        return "Threads"
+    if "facebook.com" in host:
+        return "Facebook"
+    if "youtube.com" in host or "youtu.be" in host:
+        return "YouTube"
+    if "t.me" in host or "telegram" in host:
+        return "Telegram"
+    if "signal" in host:
+        return "Signal"
+    if "x.com" in host or "twitter.com" in host:
+        return "X"
+
+    # Fallback: just use first part of the hostname
+    if host:
+        base = host.split(".")[0]
+        return base.capitalize()
+    return "Profile"
+
+
+def _social_icon_symbol(platform: str) -> str:
+    """Single-character / short symbol to show inside the round icon."""
+    p = platform.lower()
+    if "github" in p:
+        return "GH"
+    if "linkedin" in p:
+        return "in"
+    if "instagram" in p:
+        return "IG"
+    if "threads" in p:
+        return "Th"
+    if "facebook" in p:
+        return "f"
+    if "youtube" in p:
+        return "▶"
+    if "telegram" in p:
+        return "✈"
+    if p == "x" or "twitter" in p:
+        return "𝕏"
+    if "signal" in p:
+        return "S"
+    return platform[:2].upper()
 
 def generate_html(data: Dict[str, Any], output_dir: str = "public") -> None:
     """Generate a responsive, card-based index.html using scraped data."""
@@ -161,16 +214,48 @@ def generate_html(data: Dict[str, Any], output_dir: str = "public") -> None:
 
     username: str = data.get("username", "athoye")
     links: List[Dict[str, str]] = data.get("links", [])
+    social_links_raw: List[Dict[str, Any]] = data.get("social_links", [])
+
+    # Build the social icons row
+    social_items: List[str] = []
+    for item in social_links_raw:
+        url = (
+            item.get("url")
+            or item.get("href")
+            or item.get("link")
+            or ""
+        )
+        if not url:
+            continue
+
+        title = item.get("title") or _platform_from_url(url)
+        platform = _platform_from_url(url)
+        symbol = _social_icon_symbol(platform)
+
+        social_items.append(
+            f"""          <a class="social-link" href="{url}" target="_blank" rel="noopener noreferrer" aria-label="{title}">
+            <span class="social-icon">{symbol}</span>
+          </a>"""
+        )
+
+    social_block = "\n".join(social_items)
+    social_nav_html = ""
+    if social_block:
+        social_nav_html = (
+            "\n        <nav class=\"social-links\" aria-label=\"Social links\">\n"
+            + social_block
+            + "\n        </nav>"
+        )
 
     # Build the links grid markup
     link_items: List[str] = []
     for link in links:
         title = _display_title(link)
         url = link.get("url") or "#"
-        subtitle = _subtitle_for(title, url)
-        item_html = f"""          <a class=\"link-tile\" href=\"{url}\" target=\"_blank\" rel=\"noopener noreferrer\">
-            <span class=\"link-title\">{title}</span>
-            <span class=\"link-subtitle\">{subtitle}</span>
+        subtitle = _subtitle_for(title)
+        item_html = f"""          <a class="link-tile" href="{url}" target="_blank" rel="noopener noreferrer">
+            <span class="link-title">{title}</span>
+            <span class="link-subtitle">{subtitle}</span>
           </a>"""
         link_items.append(item_html)
 
@@ -178,44 +263,44 @@ def generate_html(data: Dict[str, Any], output_dir: str = "public") -> None:
     year = datetime.now().year
 
     html_content = f"""<!DOCTYPE html>
-<html lang=\"en\">
+<html lang="en">
   <head>
-    <meta charset=\"utf-8\" />
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{SITE_TITLE}</title>
-    <meta name=\"description\" content=\"The digital home of {username}.\" />
-    <link rel=\"stylesheet\" href=\"style.css\" />
+    <meta name="description" content="The digital home of {username}." />
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div class=\"background-gradient\" aria-hidden=\"true\"></div>
-    <main class=\"page\">
-      <section class=\"profile-card\">
+    <div class="background-gradient" aria-hidden="true"></div>
+    <main class="page">
+      <section class="profile-card">
         <img
-          src=\"profile_picture.jpg\"
-          alt=\"Portrait of {username}\"
-          class=\"profile-photo\"
+          src="profile_picture.jpg"
+          alt="Portrait of {username}"
+          class="profile-photo"
         />
-        <h1 class=\"name\">{username}</h1>
-        <p class=\"tagline\">{TAGLINE}</p>
-        <div class=\"meta\">
+        <h1 class="name">{username}</h1>
+        <p class="tagline">{TAGLINE}</p>{social_nav_html}
+        <div class="meta">
           <span>{LOCATION}</span>
           <span>{ROLE}</span>
         </div>
       </section>
 
-      <section class=\"links-grid\" aria-labelledby=\"explore-heading\">
-        <header class=\"section-header\">
-          <h2 id=\"explore-heading\">{SECTION_HEADING}</h2>
-          <p class=\"section-intro\">{SECTION_INTRO}</p>
+      <section class="links-grid" aria-labelledby="explore-heading">
+        <header class="section-header">
+          <h2 id="explore-heading">{SECTION_HEADING}</h2>
+          <p class="section-intro">{SECTION_INTRO}</p>
         </header>
-        <div class=\"links\">
+        <div class="links">
 {links_block}
         </div>
       </section>
 
-      <footer class=\"footer\">
+      <footer class="footer">
         <p>{FOOTER_LINE}</p>
-        <p class=\"small-print\">© {year} {username}. Crafted with care.</p>
+        <p class="small-print">© {year} {username}. Crafted with care.</p>
       </footer>
     </main>
   </body>
@@ -225,7 +310,6 @@ def generate_html(data: Dict[str, Any], output_dir: str = "public") -> None:
     index_path = os.path.join(output_dir, "index.html")
     with open(index_path, "w", encoding="utf-8") as f:
         f.write(html_content)
-
 
 def generate_css(output_dir: str = "public") -> None:
     """Generate the stylesheet for the new layout.
@@ -357,6 +441,43 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+.social-links {
+  margin-top: 1.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.social-link {
+  text-decoration: none;
+}
+
+.social-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: radial-gradient(circle at 30% 0%, rgba(148, 163, 184, 0.35), rgba(15, 23, 42, 0.96));
+  border: 1px solid rgba(148, 163, 184, 0.7);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.88);
+  transition:
+    transform 140ms ease-out,
+    border-color 140ms ease-out,
+    background 140ms ease-out,
+    box-shadow 140ms ease-out;
+}
+
+.social-link:hover .social-icon {
+  transform: translateY(-2px);
+  border-color: rgba(129, 140, 248, 1);
+  background: radial-gradient(circle at 30% 0%, rgba(79, 70, 229, 0.6), rgba(15, 23, 42, 0.98));
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.95);
 }
 
 .meta span {
