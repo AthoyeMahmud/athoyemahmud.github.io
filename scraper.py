@@ -22,7 +22,6 @@ from typing import Any, Dict, List
 
 from urllib.request import urlretrieve
 from urllib.parse import urlparse
-from urllib.parse import urlparse
 
 try:
     import requests
@@ -124,10 +123,13 @@ def download_profile_picture(url: str, output_dir: str = "public") -> None:
 # --- HTML + CSS generators (new layout) ------------------------------------
 
 
-def _subtitle_for(title: str, url: str) -> str:
+def _subtitle_for(title: str, url: str | None = None) -> str:
     key = title.strip().lower()
     if key in SUBTITLE_OVERRIDES:
         return SUBTITLE_OVERRIDES[key]
+
+    if not url:
+        return f"Visit {title}"
 
     domain = urlparse(url).netloc.replace("www.", "").lower()
     domain_key = domain.split(".")[0]
@@ -150,62 +152,17 @@ def _display_title(link: Dict[str, str]) -> str:
     candidate = domain.split(".")[0]
     candidate = candidate.replace("-", " ")
     return candidate.title() or "Link"
-def _platform_from_url(url: str) -> str:
-    """Best-effort guess of platform name from URL."""
-    try:
-        host = urlparse(url).netloc.lower()
-    except Exception:
-        host = ""
-
-    host = host.replace("www.", "")
-    if "github.com" in host:
-        return "GitHub"
-    if "linkedin.com" in host:
-        return "LinkedIn"
-    if "instagram.com" in host:
-        return "Instagram"
-    if "threads.net" in host:
-        return "Threads"
-    if "facebook.com" in host:
-        return "Facebook"
-    if "youtube.com" in host or "youtu.be" in host:
-        return "YouTube"
-    if "t.me" in host or "telegram" in host:
-        return "Telegram"
-    if "signal" in host:
-        return "Signal"
-    if "x.com" in host or "twitter.com" in host:
-        return "X"
-
-    # Fallback: just use first part of the hostname
-    if host:
-        base = host.split(".")[0]
-        return base.capitalize()
-    return "Profile"
 
 
-def _social_icon_symbol(platform: str) -> str:
-    """Single-character / short symbol to show inside the round icon."""
-    p = platform.lower()
-    if "github" in p:
-        return "GH"
-    if "linkedin" in p:
-        return "in"
-    if "instagram" in p:
-        return "IG"
-    if "threads" in p:
-        return "Th"
-    if "facebook" in p:
-        return "f"
-    if "youtube" in p:
-        return "▶"
-    if "telegram" in p:
-        return "✈"
-    if p == "x" or "twitter" in p:
-        return "𝕏"
-    if "signal" in p:
-        return "S"
-    return platform[:2].upper()
+def _safe_link_url(value: Any) -> str | None:
+    """Return the URL string if it looks usable, otherwise ``None``."""
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped:
+            return stripped
+    return None
+
 
 def generate_html(data: Dict[str, Any], output_dir: str = "public") -> None:
     """Generate a responsive, card-based index.html using scraped data."""
@@ -213,49 +170,30 @@ def generate_html(data: Dict[str, Any], output_dir: str = "public") -> None:
     os.makedirs(output_dir, exist_ok=True)
 
     username: str = data.get("username", "athoye")
-    links: List[Dict[str, str]] = data.get("links", [])
-    social_links_raw: List[Dict[str, Any]] = data.get("social_links", [])
-
-    # Build the social icons row
-    social_items: List[str] = []
-    for item in social_links_raw:
-        url = (
-            item.get("url")
-            or item.get("href")
-            or item.get("link")
-            or ""
-        )
-        if not url:
-            continue
-
-        title = item.get("title") or _platform_from_url(url)
-        platform = _platform_from_url(url)
-        symbol = _social_icon_symbol(platform)
-
-        social_items.append(
-            f"""          <a class="social-link" href="{url}" target="_blank" rel="noopener noreferrer" aria-label="{title}">
-            <span class="social-icon">{symbol}</span>
-          </a>"""
-        )
-
-    social_block = "\n".join(social_items)
-    social_nav_html = ""
-    if social_block:
-        social_nav_html = (
-            "\n        <nav class=\"social-links\" aria-label=\"Social links\">\n"
-            + social_block
-            + "\n        </nav>"
-        )
+    raw_links: List[Any] = data.get("links", [])
 
     # Build the links grid markup
     link_items: List[str] = []
-    for link in links:
+    for idx, link in enumerate(raw_links):
+        if not isinstance(link, dict):
+            print(f"Skipping link #{idx} because it is not a mapping (got {type(link).__name__}).")
+            continue
+
         title = _display_title(link)
-        url = link.get("url") or "#"
-        subtitle = _subtitle_for(title)
-        item_html = f"""          <a class="link-tile" href="{url}" target="_blank" rel="noopener noreferrer">
-            <span class="link-title">{title}</span>
-            <span class="link-subtitle">{subtitle}</span>
+        raw_url = _safe_link_url(link.get("url"))
+        url = raw_url or "#"
+
+        try:
+            subtitle = _subtitle_for(title, raw_url)
+        except TypeError:
+            subtitle = f"Visit {title}"
+        except Exception as exc:  # pragma: no cover - defensive guard for unexpected data
+            print(f"Falling back to default subtitle for '{title}': {exc}")
+            subtitle = f"Visit {title}"
+
+        item_html = f"""          <a class=\"link-tile\" href=\"{url}\" target=\"_blank\" rel=\"noopener noreferrer\">
+            <span class=\"link-title\">{title}</span>
+            <span class=\"link-subtitle\">{subtitle}</span>
           </a>"""
         link_items.append(item_html)
 
