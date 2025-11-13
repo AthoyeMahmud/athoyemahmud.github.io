@@ -111,13 +111,16 @@ def download_profile_picture(url: str, output_dir: str = "public") -> None:
             print(f"Failed to download profile picture via urllib: {exc}")
             return
 
-    response = requests.get(url, stream=True, timeout=20)
-    if response.status_code == 200:
-        with open(filename, "wb") as f:
-            for chunk in response.iter_content(1024):
-                f.write(chunk)
-    else:
-        print(f"Failed to download profile picture. Status code: {response.status_code}")
+    try:
+        response = requests.get(url, stream=True, timeout=20)
+        if response.status_code == 200:
+            with open(filename, "wb") as f:
+                for chunk in response.iter_content(1024):
+                    f.write(chunk)
+        else:
+            print(f"Failed to download profile picture. Status code: {response.status_code}")
+    except Exception as exc:  # pragma: no cover - handle network errors gracefully
+        print(f"Failed to download profile picture: {exc}")
 
 
 # --- HTML + CSS generators (new layout) ------------------------------------
@@ -171,6 +174,34 @@ def generate_html(data: Dict[str, Any], output_dir: str = "public") -> None:
 
     username: str = data.get("username", "athoye")
     raw_links: List[Any] = data.get("links", [])
+    social_links: List[Any] = data.get("social_links", [])
+
+    # Build the social links HTML
+    social_items: List[str] = []
+    for social_link in social_links:
+        if not isinstance(social_link, dict):
+            continue
+        
+        social_url = _safe_link_url(social_link.get("url"))
+        if not social_url:
+            continue
+            
+        social_type = social_link.get("type", "LINK").upper()
+        # Use first letter or first two letters as icon
+        icon = social_type[0] if len(social_type) > 0 else "?"
+        
+        social_item_html = f"""
+          <a class="social-link" href="{social_url}" target="_blank" rel="noopener noreferrer">
+            <span class="social-icon">{icon}</span>
+          </a>"""
+        social_items.append(social_item_html)
+    
+    if social_items:
+        social_nav_html = f"""
+        <nav class="social-links" aria-label="Social media links">{"".join(social_items)}
+        </nav>"""
+    else:
+        social_nav_html = ""
 
     # Build the links grid markup
     link_items: List[str] = []
