@@ -16,11 +16,17 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime
 from typing import Any, Dict, List
 
-import requests
-from bs4 import BeautifulSoup
+from urllib.request import urlretrieve
+from urllib.parse import urlparse
+
+try:
+    import requests
+except ImportError:  # pragma: no cover - fallback when requests is unavailable
+    requests = None
 
 
 # --- Content knobs (easy to tweak later) ------------------------------------
@@ -30,7 +36,7 @@ TAGLINE = (
     "Building thoughtful data products, documenting the journey, and staying curious."
 )
 LOCATION = "Dhaka, Bangladesh"
-ROLE = "Data Science undergrad · ML/AI aspirant"
+ROLE = "Data enthusiast · storyteller"
 SECTION_HEADING = "Explore"
 SECTION_INTRO = (
     "Favorite corners of the internet where I read, watch, train, and ship ideas."
@@ -46,6 +52,7 @@ SUBTITLE_OVERRIDES = {
     "roadmap.sh": "Developer roadmaps I track and recommend.",
     "streamlit": "Apps and experiments built with data.",
     "kaggle": "Datasets, notebooks and ML experiments.",
+    "strava": "Tracking rides and runs.",
 }
 
 
@@ -63,12 +70,16 @@ def scrape_linktree_data(html_file: str) -> Dict[str, Any]:
     with open(html_file, "r", encoding="utf-8") as f:
         html_content = f.read()
 
-    soup = BeautifulSoup(html_content, "html.parser")
-    script_tag = soup.find("script", {"id": "__NEXT_DATA__"})
-    if script_tag is None:
+    match = re.search(
+        r"<script[^>]*id=\"__NEXT_DATA__\"[^>]*>(.*?)</script>",
+        html_content,
+        re.DOTALL,
+    )
+    if match is None:
         raise ValueError("Could not find the __NEXT_DATA__ script tag.")
 
-    json_data = json.loads(script_tag.string)
+    script_content = match.group(1)
+    json_data = json.loads(script_content)
 
     # Match your original structure: props.pageProps.account / links / socialLinks
     page_props = json_data["props"]["pageProps"]
@@ -91,6 +102,15 @@ def download_profile_picture(url: str, output_dir: str = "public") -> None:
     """Download the profile picture into `output_dir/profile_picture.jpg`."""
 
     filename = os.path.join(output_dir, "profile_picture.jpg")
+
+    if requests is None:
+        try:
+            urlretrieve(url, filename)
+            return
+        except Exception as exc:  # pragma: no cover - logged for visibility
+            print(f"Failed to download profile picture via urllib: {exc}")
+            return
+
     response = requests.get(url, stream=True, timeout=20)
     if response.status_code == 200:
         with open(filename, "wb") as f:
@@ -103,9 +123,45 @@ def download_profile_picture(url: str, output_dir: str = "public") -> None:
 # --- HTML + CSS generators (new layout) ------------------------------------
 
 
-def _subtitle_for(title: str) -> str:
+def _subtitle_for(title: str, url: str | None = None) -> str:
     key = title.strip().lower()
-    return SUBTITLE_OVERRIDES.get(key, f"Visit {title}")
+    if key in SUBTITLE_OVERRIDES:
+        return SUBTITLE_OVERRIDES[key]
+
+    if not url:
+        return f"Visit {title}"
+
+    domain = urlparse(url).netloc.replace("www.", "").lower()
+    domain_key = domain.split(".")[0]
+    if domain_key in SUBTITLE_OVERRIDES:
+        return SUBTITLE_OVERRIDES[domain_key]
+
+    return f"Visit {title}"
+
+
+def _display_title(link: Dict[str, str]) -> str:
+    raw_title = (link.get("title") or "").strip()
+    if raw_title:
+        return raw_title
+
+    url = link.get("url") or ""
+    domain = urlparse(url).netloc.replace("www.", "")
+    if not domain:
+        return "Link"
+
+    candidate = domain.split(".")[0]
+    candidate = candidate.replace("-", " ")
+    return candidate.title() or "Link"
+
+
+def _safe_link_url(value: Any) -> str | None:
+    """Return the URL string if it looks usable, otherwise ``None``."""
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped:
+            return stripped
+    return None
 
 
 def generate_html(data: Dict[str, Any], output_dir: str = "public") -> None:
@@ -114,14 +170,27 @@ def generate_html(data: Dict[str, Any], output_dir: str = "public") -> None:
     os.makedirs(output_dir, exist_ok=True)
 
     username: str = data.get("username", "athoye")
-    links: List[Dict[str, str]] = data.get("links", [])
+    raw_links: List[Any] = data.get("links", [])
 
     # Build the links grid markup
     link_items: List[str] = []
-    for link in links:
-        title = link.get("title") or "Link"
-        url = link.get("url") or "#"
-        subtitle = _subtitle_for(title)
+    for idx, link in enumerate(raw_links):
+        if not isinstance(link, dict):
+            print(f"Skipping link #{idx} because it is not a mapping (got {type(link).__name__}).")
+            continue
+
+        title = _display_title(link)
+        raw_url = _safe_link_url(link.get("url"))
+        url = raw_url or "#"
+
+        try:
+            subtitle = _subtitle_for(title, raw_url)
+        except TypeError:
+            subtitle = f"Visit {title}"
+        except Exception as exc:  # pragma: no cover - defensive guard for unexpected data
+            print(f"Falling back to default subtitle for '{title}': {exc}")
+            subtitle = f"Visit {title}"
+
         item_html = f"""          <a class=\"link-tile\" href=\"{url}\" target=\"_blank\" rel=\"noopener noreferrer\">
             <span class=\"link-title\">{title}</span>
             <span class=\"link-subtitle\">{subtitle}</span>
@@ -211,10 +280,11 @@ body {
   margin: 0;
   min-height: 100vh;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.6;
   color: var(--text-primary);
   background: radial-gradient(circle at top left, #111827, #020617 52%, #020617 100%);
   display: flex;
-  align-items: stretch;
+  align-items: center;
   justify-content: center;
   padding: clamp(1.5rem, 5vw, 3rem);
 }
@@ -231,9 +301,10 @@ body {
 }
 
 .page {
+  position: relative;
   width: min(960px, 100%);
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.6fr);
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.45fr);
   gap: clamp(1.5rem, 3vw, 2.25rem);
 }
 
@@ -248,6 +319,20 @@ body {
     0 18px 45px rgba(15, 23, 42, 0.72),
     0 0 0 1px rgba(15, 23, 42, 0.9);
   backdrop-filter: blur(22px);
+}
+
+.profile-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.6rem;
+}
+
+.links-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
 }
 
 .profile-card::before {
@@ -321,13 +406,14 @@ body {
   margin: 0;
   font-size: 0.96rem;
   color: var(--text-muted);
+  max-width: 46ch;
 }
 
 .links {
   margin-top: 1.4rem;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.25rem;
 }
 
 .link-tile {
@@ -335,7 +421,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  padding: 0.9rem 1rem;
+  padding: 1.05rem 1.2rem;
   border-radius: 1rem;
   border: 1px solid rgba(148, 163, 184, 0.4);
   background: radial-gradient(circle at 0% 0%, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.86));
@@ -368,10 +454,10 @@ body {
 }
 
 .link-tile:hover {
-  transform: translateY(-4px);
+  transform: translateY(-6px);
   border-color: rgba(129, 140, 248, 0.9);
   background: radial-gradient(circle at 0% 0%, rgba(79, 70, 229, 0.28), rgba(15, 23, 42, 0.94));
-  box-shadow: 0 14px 35px rgba(15, 23, 42, 0.85);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.82);
 }
 
 .footer {
@@ -380,6 +466,9 @@ body {
   text-align: center;
   font-size: 0.86rem;
   color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
 }
 
 .small-print {
@@ -391,6 +480,7 @@ body {
 @media (max-width: 880px) {
   body {
     padding: 1.25rem;
+    align-items: flex-start;
   }
 
   .page {
