@@ -250,7 +250,7 @@ def generate_html(data: Dict[str, Any], output_dir: str = "public") -> None:
     # Build the links grid markup
     link_items: List[str] = []
     for link in links:
-        title = link.get("title") or "Link"
+        title = _display_title(link)
         url = link.get("url") or "#"
         subtitle = _subtitle_for(title)
         item_html = f"""          <a class="link-tile" href="{url}" target="_blank" rel="noopener noreferrer">
